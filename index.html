@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLUEPRINT — paste notes, get a project plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue-deep:#0A2E4D;
+    --blue-mid:#0F3A61;
+    --grid-line:rgba(255,255,255,0.07);
+    --grid-line-strong:rgba(255,255,255,0.14);
+    --cyan:#7FDBFF;
+    --cyan-dim:#4A90A8;
+    --amber:#F2B85C;
+    --ink:#EAF4FB;
+    --ink-soft:#8FB2C9;
+    --panel:#0D3457;
+    --panel2:#0A2A47;
+    --mono:'Space Mono',monospace;
+    --sans:'Work Sans',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background-color:var(--blue-deep);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:24px 24px;
+    color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px;}
+  nav{display:flex;justify-content:space-between;align-items:center;padding:26px 0;border-bottom:1px solid var(--grid-line-strong);}
+  .logo{font-family:var(--mono);font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;letter-spacing:0.02em;color:var(--cyan);}
+  .logo svg{flex-shrink:0;}
+  .tagline{font-family:var(--mono);font-size:11px;color:var(--ink-soft);letter-spacing:0.06em;}
+
+  h1{font-family:var(--sans);font-weight:700;font-size:clamp(26px,3.2vw,34px);margin:30px 0 8px;letter-spacing:-0.01em;}
+  .sub{color:var(--ink-soft);font-size:15px;margin:0 0 30px;max-width:64ch;}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:24px;padding-bottom:52px;}
+
+  .panel{background:var(--panel);border:1px solid var(--grid-line-strong);border-radius:4px;padding:22px 24px;}
+  .panel-label{
+    font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--ink-soft);margin:0 0 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+  }
+
+  .input-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.05em;}
+  .field input[type=date]{
+    font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--grid-line-strong);border-radius:3px;padding:8px 10px;
+  }
+
+  textarea{
+    width:100%;min-height:220px;border:1px solid var(--grid-line-strong);border-radius:3px;
+    padding:14px;font-family:var(--sans);font-size:14px;color:var(--ink);
+    background:var(--panel2);resize:vertical;line-height:1.6;
+  }
+  textarea::placeholder{color:#4A6A83;}
+  textarea:focus{outline:2px solid var(--cyan);outline-offset:1px;}
+
+  .btn-row{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;}
+  button.primary{
+    font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:0.02em;
+    background:var(--cyan);color:#062338;border:none;padding:12px 20px;
+    border-radius:3px;cursor:pointer;transition:filter .15s ease;
+  }
+  button.primary:hover{filter:brightness(1.1);}
+  button.primary:disabled{background:#355972;color:#7C97AA;cursor:not-allowed;filter:none;}
+  button.ghost{
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);
+    background:none;border:1px solid var(--grid-line-strong);padding:11px 15px;border-radius:3px;cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--cyan-dim);color:var(--ink);}
+
+  .sample-link{font-family:var(--mono);font-size:11.5px;color:var(--cyan);cursor:pointer;text-decoration:underline;background:none;border:none;padding:0;}
+
+  .status{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-top:10px;min-height:16px;}
+  .status.err{color:#F28C6A;}
+
+  .empty-state{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:220px;color:var(--ink-soft);text-align:center;font-size:13.5px;gap:10px;
+  }
+  .empty-state svg{color:#2C5776;}
+
+  /* --- gantt --- */
+  .gantt-scroll{overflow-x:auto;border:1px solid var(--grid-line-strong);border-radius:3px;background:var(--panel2);}
+  .gantt-inner{display:inline-block;min-width:100%;}
+  .gantt-header{display:flex;border-bottom:1px solid var(--grid-line-strong);position:sticky;top:0;background:var(--panel2);}
+  .gantt-header .row-label-col{width:280px;flex-shrink:0;padding:8px 12px;font-family:var(--mono);font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.05em;border-right:1px solid var(--grid-line-strong);}
+  .gantt-header .week-col{
+    font-family:var(--mono);font-size:10px;color:var(--ink-soft);padding:8px 4px;border-right:1px solid var(--grid-line);white-space:nowrap;
+  }
+
+  .gantt-row{display:flex;align-items:center;border-bottom:1px solid var(--grid-line);min-height:34px;}
+  .gantt-row.phase{background:rgba(127,219,255,0.05);}
+  .row-label-col{width:280px;flex-shrink:0;padding:6px 12px;border-right:1px solid var(--grid-line-strong);font-size:12.5px;display:flex;align-items:center;gap:6px;}
+  .row-label-col.lvl-2{padding-left:26px;color:var(--ink);}
+  .row-label-col.lvl-1{font-weight:700;color:var(--cyan);font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:0.03em;}
+  .res-tag{font-family:var(--mono);font-size:9.5px;color:var(--ink-soft);background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:2px;white-space:nowrap;}
+
+  .timeline-track{position:relative;height:34px;flex:1;}
+  .bar{
+    position:absolute;top:7px;height:20px;border-radius:2px;background:var(--cyan);
+    box-shadow:0 0 0 1px rgba(0,0,0,0.25);
+    opacity:0;animation:draw .35s ease forwards;
+  }
+  .bar.critical{background:var(--amber);}
+  @keyframes draw{
+    from{opacity:0;transform:scaleX(0.3);transform-origin:left;}
+    to{opacity:1;transform:scaleX(1);}
+  }
+  .milestone-mark{
+    position:absolute;top:8px;width:16px;height:16px;background:var(--amber);
+    transform:rotate(45deg);border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,0.3);
+    opacity:0;animation:pop .3s ease forwards;
+  }
+  @keyframes pop{from{opacity:0;transform:rotate(45deg) scale(0.5);}to{opacity:1;transform:rotate(45deg) scale(1);}}
+
+  .legend{display:flex;gap:18px;padding:10px 12px;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--grid-line-strong);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  .output-actions{display:flex;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid-line-strong);flex-wrap:wrap;}
+
+  .dots{display:inline-flex;gap:4px;}
+  .dots span{width:5px;height:5px;background:var(--ink-soft);border-radius:50%;animation:blink 1.2s infinite ease-in-out;}
+  .dots span:nth-child(2){animation-delay:0.2s;}
+  .dots span:nth-child(3){animation-delay:0.4s;}
+  @keyframes blink{0%,80%,100%{opacity:0.2;}40%{opacity:1;}}
+
+  footer{padding:20px 0 50px;border-top:1px solid var(--grid-line-strong);color:var(--ink-soft);font-family:var(--mono);font-size:11px;}
+  footer a{color:var(--cyan);}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav>
+    <div class="logo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+      BLUEPRINT
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <input id="access-code" type="password" placeholder="access code" autocomplete="off"
+        style="font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px solid var(--grid-line-strong);
+        color:var(--ink);padding:6px 9px;border-radius:3px;width:110px;">
+      <span class="tagline">PM TOOLKIT — v0.1</span>
+    </div>
+  </nav>
+
+  <h1>Turn notes into a project plan.</h1>
+  <p class="sub">Paste a kickoff call, scoping notes, or an email thread. Get back a work breakdown structure with phases, tasks, durations, and dependencies — ready to preview here or export straight into Microsoft Project.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <p class="panel-label"><span>Project notes</span><button class="sample-link" id="sample-btn">Use sample transcript</button></p>
+
+      <div class="input-row">
+        <div class="field">
+          <label>Project start date</label>
+          <input type="date" id="start-date">
+        </div>
+      </div>
+
+      <textarea id="input" placeholder="Paste your kickoff call notes, scope discussion, or email thread here..."></textarea>
+      <div class="btn-row">
+        <button class="primary" id="generate-btn">Generate plan</button>
+        <button class="ghost" id="clear-btn">Clear</button>
+      </div>
+      <p class="status" id="status"></p>
+    </div>
+
+    <div class="panel" id="output-panel">
+      <p class="panel-label"><span>Schedule preview</span><span id="out-status"></span></p>
+      <div id="output-content">
+        <div class="empty-state">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18"/><path d="M8 13h4M8 17h8"/></svg>
+          <p>Your Gantt-style schedule will<br>be drafted here.</p>
+        </div>
+      </div>
+      <div class="output-actions" id="output-actions" style="display:none;">
+        <button class="ghost" id="csv-btn">Download for Excel / MS Project import (.csv)</button>
+        <button class="ghost" id="xml-btn">Download as Project XML (.xml)</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>BLUEPRINT runs entirely in your browser. Nothing you paste is stored anywhere. XML export follows Microsoft's Project interchange schema — if it doesn't import cleanly, the .csv route via Excel's Import Wizard is the reliable fallback.</footer>
+</div>
+
+<script>
+// System prompt now lives server-side in /api/generate.js
+
+const accessCodeEl = document.getElementById('access-code');
+accessCodeEl.value = sessionStorage.getItem('blueprint_code') || '';
+accessCodeEl.addEventListener('change', () => {
+  sessionStorage.setItem('blueprint_code', accessCodeEl.value);
+});
+
+const SAMPLE_TRANSCRIPT = `Kickoff call notes - Gate Change Notification project
+
+Maria (Client, Airport Ops): We need push notifications when a gate changes
+inside 30 minutes of departure. App first, but the terminal display boards
+need to update at the same time too.
+
+Dev (Delivery Lead): Okay. Let's scope this properly. We'll need requirements
+sign-off before any build starts - probably a week of discovery and
+requirements gathering given the integration points.
+
+Maria: Sure. After that we'll need design mockups for the notification UI,
+and I'll want to review those before engineering starts.
+
+Dev: Understood, design review is a hard gate for us too. Once that's signed
+off, backend integration with the gate-change trigger system is the biggest
+piece of engineering work - probably three weeks given we're touching both
+the manual ops tool and the automated weather-delay feed.
+
+Maria: And the app notification piece?
+
+Dev: That can run in parallel with backend integration once the API contract
+is defined - call it two weeks for the mobile team.
+
+Maria: What about the terminal display boards?
+
+Dev: That's a separate integration, can also run in parallel, about two
+weeks, but it depends on the same backend API contract being finalized
+first.
+
+Dev: Once both pieces are done we'll need a week of QA and integration
+testing before we can pilot it in one terminal, then a go-live milestone
+after the pilot signs off.
+
+Maria: Sounds good. Let's also make sure we have a project kickoff meeting
+as the very first thing on the calendar.`;
+
+const startDateEl = document.getElementById('start-date');
+const inputEl = document.getElementById('input');
+const generateBtn = document.getElementById('generate-btn');
+const clearBtn = document.getElementById('clear-btn');
+const sampleBtn = document.getElementById('sample-btn');
+const statusEl = document.getElementById('status');
+const outStatusEl = document.getElementById('out-status');
+const outputContent = document.getElementById('output-content');
+const outputActions = document.getElementById('output-actions');
+const csvBtn = document.getElementById('csv-btn');
+const xmlBtn = document.getElementById('xml-btn');
+
+let lastPlan = null; // { projectTitle, flatTasks: [...] }
+
+// default start date = today
+(function(){
+  const d = new Date();
+  startDateEl.value = d.toISOString().slice(0,10);
+})();
+
+sampleBtn.addEventListener('click', () => {
+  inputEl.value = SAMPLE_TRANSCRIPT;
+});
+
+clearBtn.addEventListener('click', () => {
+  inputEl.value = '';
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+  resetOutput();
+});
+
+function resetOutput(){
+  outputContent.innerHTML = `
+    <div class="empty-state">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18"/><path d="M8 13h4M8 17h8"/></svg>
+      <p>Your Gantt-style schedule will<br>be drafted here.</p>
+    </div>`;
+  outputActions.style.display = 'none';
+  outStatusEl.textContent = '';
+  lastPlan = null;
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+/* ---------- business-day scheduling ---------- */
+function isWeekend(d){ const day = d.getDay(); return day === 0 || day === 6; }
+function rollToBusinessDay(d){
+  const nd = new Date(d);
+  while (isWeekend(nd)) nd.setDate(nd.getDate() + 1);
+  return nd;
+}
+function nextBusinessDay(d){
+  const nd = new Date(d);
+  do { nd.setDate(nd.getDate() + 1); } while (isWeekend(nd));
+  return nd;
+}
+function advanceBusinessDays(start, extraDays){
+  const d = new Date(start);
+  let count = 0;
+  while (count < extraDays){
+    d.setDate(d.getDate() + 1);
+    if (!isWeekend(d)) count++;
+  }
+  return d;
+}
+
+function scheduleTasks(flatTasks, projectStart){
+  const byId = {};
+  for (const t of flatTasks){
+    if (t.type !== 'task') continue;
+    let start;
+    if (t.predecessors && t.predecessors.length){
+      let latestFinish = null;
+      for (const pid of t.predecessors){
+        const p = byId[pid];
+        if (p && (!latestFinish || p.finish > latestFinish)) latestFinish = p.finish;
+      }
+      start = latestFinish ? nextBusinessDay(latestFinish) : rollToBusinessDay(projectStart);
+    } else {
+      start = rollToBusinessDay(projectStart);
+    }
+    const dur = Math.max(0, t.durationDays || 0);
+    const finish = t.milestone || dur === 0 ? new Date(start) : advanceBusinessDays(start, dur - 1);
+    t.start = start;
+    t.finish = finish;
+    byId[t.id] = t;
+  }
+  return flatTasks;
+}
+
+function fmtDate(d){
+  return d.toISOString().slice(0,10);
+}
+
+/* ---------- flatten + render ---------- */
+function flattenPlan(plan){
+  const flat = [];
+  for (const phase of (plan.phases || [])){
+    flat.push({ type: 'phase', name: phase.phaseName });
+    for (const t of (phase.tasks || [])){
+      flat.push({
+        type: 'task',
+        id: t.id,
+        name: t.name,
+        durationDays: t.durationDays || 0,
+        predecessors: t.predecessors || [],
+        milestone: !!t.milestone,
+        resourceRole: t.resourceRole || null
+      });
+    }
+  }
+  return flat;
+}
+
+function renderGantt(flatTasks){
+  const taskRows = flatTasks.filter(t => t.type === 'task');
+  if (!taskRows.length){
+    return '<p style="color:var(--ink-soft);font-size:13px;">No tasks were generated from that input.</p>';
+  }
+
+  // compute phase rollup dates
+  let cursorPhaseIdx = -1;
+  const phaseSpans = {};
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){ cursorPhaseIdx = idx; phaseSpans[idx] = { start:null, finish:null }; }
+    else if (cursorPhaseIdx !== -1 && row.start){
+      const span = phaseSpans[cursorPhaseIdx];
+      if (!span.start || row.start < span.start) span.start = row.start;
+      if (!span.finish || row.finish > span.finish) span.finish = row.finish;
+    }
+  });
+
+  const minStart = new Date(Math.min(...taskRows.map(t => t.start.getTime())));
+  const maxFinish = new Date(Math.max(...taskRows.map(t => t.finish.getTime())));
+  const totalDays = Math.max(1, Math.round((maxFinish - minStart) / 86400000) + 1);
+  const pxPerDay = totalDays > 60 ? 10 : totalDays > 30 ? 16 : 24;
+  const timelineWidth = totalDays * pxPerDay;
+
+  function dayOffset(d){ return Math.round((d - minStart) / 86400000); }
+
+  // week header
+  let headerCols = '';
+  for (let d = 0; d < totalDays; d += 7){
+    const date = new Date(minStart); date.setDate(date.getDate() + d);
+    const w = Math.min(7, totalDays - d) * pxPerDay;
+    headerCols += `<div class="week-col" style="width:${w}px;flex-shrink:0;">${date.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div>`;
+  }
+
+  let rowsHtml = '';
+  let phaseIdx = -1;
+  let taskAnimIdx = 0;
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){
+      phaseIdx = idx;
+      const span = phaseSpans[idx];
+      const label = span.start ? `${fmtDate(span.start)} → ${fmtDate(span.finish)}` : '';
+      rowsHtml += `<div class="gantt-row phase">
+        <div class="row-label-col lvl-1">${escapeHtml(row.name)}</div>
+        <div class="timeline-track"><span style="position:absolute;left:6px;top:8px;font-family:var(--mono);font-size:10px;color:var(--ink-soft);">${label}</span></div>
+      </div>`;
+    } else {
+      const left = dayOffset(row.start) * pxPerDay;
+      const width = (dayOffset(row.finish) - dayOffset(row.start) + 1) * pxPerDay;
+      const delay = (taskAnimIdx * 0.04).toFixed(3);
+      taskAnimIdx++;
+      const resTag = row.resourceRole ? `<span class="res-tag">${escapeHtml(row.resourceRole)}</span>` : '';
+      let bar;
+      if (row.milestone){
+        bar = `<div class="milestone-mark" style="left:${left}px;animation-delay:${delay}s;" title="${escapeHtml(row.name)} — ${fmtDate(row.start)}"></div>`;
+      } else {
+        bar = `<div class="bar" style="left:${left}px;width:${Math.max(width,pxPerDay)}px;animation-delay:${delay}s;" title="${escapeHtml(row.name)} — ${fmtDate(row.start)} to ${fmtDate(row.finish)}"></div>`;
+      }
+      rowsHtml += `<div class="gantt-row">
+        <div class="row-label-col lvl-2">${escapeHtml(row.name)} ${resTag}</div>
+        <div class="timeline-track">${bar}</div>
+      </div>`;
+    }
+  });
+
+  return `
+    <div class="gantt-scroll">
+      <div class="gantt-inner" style="min-width:${timelineWidth + 280}px;">
+        <div class="gantt-header">
+          <div class="row-label-col">Task</div>
+          ${headerCols}
+        </div>
+        ${rowsHtml}
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--cyan);"></span> Task</span>
+          <span><span class="swatch" style="background:var(--amber);transform:rotate(45deg);"></span> Milestone</span>
+          <span>Project span: ${fmtDate(minStart)} → ${fmtDate(maxFinish)} (${totalDays} calendar days)</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- export: CSV for Excel / MS Project import ---------- */
+function buildCSV(plan, flatTasks){
+  const rows = [['ID','Task Name','Outline Level','Duration (days)','Start','Finish','Predecessors','Milestone','Resource Names']];
+  flatTasks.forEach(row => {
+    if (row.type === 'phase'){
+      rows.push(['', row.name, 1, '', '', '', '', '', '']);
+    } else {
+      rows.push([
+        row.id,
+        row.name,
+        2,
+        row.milestone ? 0 : row.durationDays,
+        fmtDate(row.start),
+        fmtDate(row.finish),
+        (row.predecessors || []).join(';'),
+        row.milestone ? 'Yes' : 'No',
+        row.resourceRole || ''
+      ]);
+    }
+  });
+  return rows.map(r => r.map(cell => {
+    const s = String(cell);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(',')).join('\r\n');
+}
+
+/* ---------- export: Project XML interchange format ---------- */
+function buildProjectXML(plan, flatTasks){
+  const taskRows = flatTasks.filter(t => t.type === 'task');
+  const minStart = new Date(Math.min(...taskRows.map(t => t.start.getTime())));
+  const maxFinish = new Date(Math.max(...taskRows.map(t => t.finish.getTime())));
+
+  function iso(d, time){ return fmtDate(d) + 'T' + time; }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  let phaseUidCounter = 90000; // high range to avoid colliding with task ids
+  let taskXml = '';
+  let phaseIdx = -1;
+  const phaseUidMap = {};
+
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){
+      phaseIdx = idx;
+      const uid = phaseUidCounter++;
+      phaseUidMap[idx] = uid;
+      // placeholder, filled after we know child span -- computed below in second pass
+    }
+  });
+
+  // compute phase spans
+  const phaseSpans = {};
+  let curPhase = -1;
+  flatTasks.forEach((row) => {
+    if (row.type === 'phase'){ curPhase = row; phaseSpans[phaseUidMap[flatTasks.indexOf(row)]] = {start:null,finish:null,name:row.name}; }
+  });
+
+  // simpler second pass for spans keyed by phase uid in order
+  let phaseOrder = [];
+  let runningPhaseUid = null;
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){
+      runningPhaseUid = phaseUidMap[idx];
+      phaseOrder.push(runningPhaseUid);
+      phaseSpans[runningPhaseUid] = { start: null, finish: null, name: row.name };
+    } else if (runningPhaseUid !== null && row.start){
+      const span = phaseSpans[runningPhaseUid];
+      if (!span.start || row.start < span.start) span.start = row.start;
+      if (!span.finish || row.finish > span.finish) span.finish = row.finish;
+    }
+  });
+
+  runningPhaseUid = null;
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){
+      runningPhaseUid = phaseUidMap[idx];
+      const span = phaseSpans[runningPhaseUid] || {};
+      const s = span.start || minStart, f = span.finish || maxFinish;
+      taskXml += `<Task>
+  <UID>${runningPhaseUid}</UID>
+  <ID>${runningPhaseUid}</ID>
+  <Name>${esc(row.name)}</Name>
+  <Type>0</Type>
+  <IsNull>0</IsNull>
+  <OutlineLevel>1</OutlineLevel>
+  <Priority>500</Priority>
+  <Start>${iso(s,'08:00:00')}</Start>
+  <Finish>${iso(f,'17:00:00')}</Finish>
+  <Duration>PT0H0M0S</Duration>
+  <DurationFormat>7</DurationFormat>
+  <Milestone>0</Milestone>
+  <Summary>1</Summary>
+</Task>
+`;
+    } else {
+      const hours = row.milestone ? 0 : (row.durationDays || 0) * 8;
+      let predXml = '';
+      (row.predecessors || []).forEach(pid => {
+        predXml += `  <PredecessorLink>
+    <PredecessorUID>${pid}</PredecessorUID>
+    <Type>1</Type>
+    <CrossProject>0</CrossProject>
+    <LinkLag>0</LinkLag>
+    <LagFormat>7</LagFormat>
+  </PredecessorLink>
+`;
+      });
+      taskXml += `<Task>
+  <UID>${row.id}</UID>
+  <ID>${row.id}</ID>
+  <Name>${esc(row.name)}</Name>
+  <Type>0</Type>
+  <IsNull>0</IsNull>
+  <OutlineLevel>2</OutlineLevel>
+  <Priority>500</Priority>
+  <Start>${iso(row.start,'08:00:00')}</Start>
+  <Finish>${iso(row.finish,'17:00:00')}</Finish>
+  <Duration>PT${hours}H0M0S</Duration>
+  <DurationFormat>7</DurationFormat>
+  <Milestone>${row.milestone ? 1 : 0}</Milestone>
+  <Summary>0</Summary>
+${predXml}</Task>
+`;
+    }
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+<SaveVersion>14</SaveVersion>
+<Name>${esc(plan.projectTitle || 'Project Plan')}</Name>
+<Title>${esc(plan.projectTitle || 'Project Plan')}</Title>
+<ScheduleFromStart>1</ScheduleFromStart>
+<StartDate>${iso(minStart,'08:00:00')}</StartDate>
+<FinishDate>${iso(maxFinish,'17:00:00')}</FinishDate>
+<DefaultStartTime>08:00:00</DefaultStartTime>
+<DefaultFinishTime>17:00:00</DefaultFinishTime>
+<MinutesPerDay>480</MinutesPerDay>
+<MinutesPerWeek>2400</MinutesPerWeek>
+<DaysPerMonth>20</DaysPerMonth>
+<CalendarUID>1</CalendarUID>
+<Tasks>
+${taskXml}</Tasks>
+</Project>`;
+}
+
+/* ---------- main flow ---------- */
+generateBtn.addEventListener('click', async () => {
+  const text = inputEl.value.trim();
+  if (!text){
+    statusEl.textContent = 'Paste some notes first, or use the sample transcript.';
+    statusEl.className = 'status err';
+    return;
+  }
+
+  generateBtn.disabled = true;
+  generateBtn.textContent = 'Drafting…';
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+  outStatusEl.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+  outputActions.style.display = 'none';
+
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Access-Code": accessCodeEl.value
+      },
+      body: JSON.stringify({ text })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok){
+      throw new Error(data.error || ('Request failed: ' + response.status));
+    }
+
+    const resultText = data.result || '';
+
+    if (!resultText){
+      throw new Error('No content returned.');
+    }
+
+    const plan = JSON.parse(resultText);
+    const flat = flattenPlan(plan);
+    const projectStart = new Date(startDateEl.value + 'T00:00:00');
+    scheduleTasks(flat, projectStart);
+
+    lastPlan = { plan, flatTasks: flat };
+    outputContent.innerHTML = renderGantt(flat);
+    outputActions.style.display = 'flex';
+    outStatusEl.textContent = 'drafted';
+  } catch (err){
+    statusEl.textContent = 'Something went wrong: ' + err.message;
+    statusEl.className = 'status err';
+    outStatusEl.textContent = '';
+    resetOutput();
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.textContent = 'Generate plan';
+  }
+});
+
+csvBtn.addEventListener('click', () => {
+  if (!lastPlan) return;
+  const csv = buildCSV(lastPlan.plan, lastPlan.flatTasks);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'project-plan.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+xmlBtn.addEventListener('click', () => {
+  if (!lastPlan) return;
+  const xml = buildProjectXML(lastPlan.plan, lastPlan.flatTasks);
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'project-plan.xml';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+
+</body>
+</html>
