@@ -444,16 +444,37 @@ function renderGantt(flatTasks){
 
 /* ---------- export: CSV for Excel / MS Project import ---------- */
 function buildCSV(plan, flatTasks){
-  const rows = [['ID','Task Name','Outline Level','Duration (days)','Start','Finish','Predecessors','Milestone','Resource Names']];
-  flatTasks.forEach(row => {
+  const phaseSpans = {};
+  let curPhaseIdx = -1;
+  flatTasks.forEach((row, idx) => {
+    if (row.type === 'phase'){ curPhaseIdx = idx; phaseSpans[idx] = { start: null, finish: null }; }
+    else if (curPhaseIdx !== -1 && row.start){
+      const span = phaseSpans[curPhaseIdx];
+      if (!span.start || row.start < span.start) span.start = row.start;
+      if (!span.finish || row.finish > span.finish) span.finish = row.finish;
+    }
+  });
+
+  const rows = [['ID','Name','Outline Level','Duration','Start','Finish','Predecessors','Milestone','Resource Names']];
+  flatTasks.forEach((row, idx) => {
     if (row.type === 'phase'){
-      rows.push(['', row.name, 1, '', '', '', '', '', '']);
+      const span = phaseSpans[idx] || {};
+      const days = span.start && span.finish ? Math.round((span.finish - span.start) / 86400000) + 1 : '';
+      rows.push([
+        '',
+        row.name,
+        1,
+        days !== '' ? days + 'd' : '',
+        span.start ? fmtDate(span.start) : '',
+        span.finish ? fmtDate(span.finish) : '',
+        '', 'No', ''
+      ]);
     } else {
       rows.push([
         row.id,
         row.name,
         2,
-        row.milestone ? 0 : row.durationDays,
+        row.milestone ? '0d' : row.durationDays + 'd',
         fmtDate(row.start),
         fmtDate(row.finish),
         (row.predecessors || []).join(';'),
@@ -536,7 +557,7 @@ function buildProjectXML(plan, flatTasks){
 </Task>
 `;
     } else {
-      const hours = row.milestone ? 0 : (row.durationDays || 0) * 8;
+      const hours = (row.durationDays || 0) * 8;
       let predXml = '';
       (row.predecessors || []).forEach(pid => {
         predXml += `  <PredecessorLink>
@@ -548,6 +569,11 @@ function buildProjectXML(plan, flatTasks){
   </PredecessorLink>
 `;
       });
+      const durationXml = row.milestone
+        ? ''
+        : `  <Duration>PT${hours}H0M0S</Duration>
+  <DurationFormat>7</DurationFormat>
+`;
       taskXml += `<Task>
   <UID>${row.id}</UID>
   <ID>${row.id}</ID>
@@ -558,9 +584,7 @@ function buildProjectXML(plan, flatTasks){
   <Priority>500</Priority>
   <Start>${iso(row.start,'08:00:00')}</Start>
   <Finish>${iso(row.finish,'17:00:00')}</Finish>
-  <Duration>PT${hours}H0M0S</Duration>
-  <DurationFormat>7</DurationFormat>
-  <Milestone>${row.milestone ? 1 : 0}</Milestone>
+${durationXml}  <Milestone>${row.milestone ? 1 : 0}</Milestone>
   <Summary>0</Summary>
 ${predXml}</Task>
 `;
