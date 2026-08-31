@@ -129,6 +129,15 @@
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
 
+  .rates-panel{margin-top:16px;padding-top:14px;border-top:1px solid var(--grid-line-strong);}
+  .rate-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;font-size:12.5px;}
+  .rate-row .role-name{color:var(--ink);}
+  .rate-row input{
+    width:80px;font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--grid-line-strong);border-radius:3px;padding:5px 8px;text-align:right;
+  }
+  .cost-summary{font-family:var(--mono);font-size:12px;color:var(--cyan);margin:10px 0 0;padding-top:10px;border-top:1px solid var(--grid-line);}
+
   .output-actions{display:flex;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--grid-line-strong);flex-wrap:wrap;}
 
   .dots{display:inline-flex;gap:4px;}
@@ -187,6 +196,12 @@
           <p>Your Gantt-style schedule will<br>be drafted here.</p>
         </div>
       </div>
+      <div class="rates-panel" id="rates-panel" style="display:none;">
+        <p class="panel-label"><span>Resource rates ($/hr) — AI-suggested, adjust as needed</span></p>
+        <div id="rates-list"></div>
+        <p class="cost-summary" id="cost-summary"></p>
+      </div>
+
       <div class="output-actions" id="output-actions" style="display:none;">
         <button class="ghost" id="csv-btn">Download for Excel / MS Project import (.csv)</button>
         <button class="ghost" id="xml-btn">Download as Project XML (.xml)</button>
@@ -253,6 +268,9 @@ const outputContent = document.getElementById('output-content');
 const outputActions = document.getElementById('output-actions');
 const csvBtn = document.getElementById('csv-btn');
 const xmlBtn = document.getElementById('xml-btn');
+const ratesPanel = document.getElementById('rates-panel');
+const ratesList = document.getElementById('rates-list');
+const costSummary = document.getElementById('cost-summary');
 
 let lastPlan = null; // { projectTitle, flatTasks: [...] }
 
@@ -280,6 +298,7 @@ function resetOutput(){
       <p>Your Gantt-style schedule will<br>be drafted here.</p>
     </div>`;
   outputActions.style.display = 'none';
+  ratesPanel.style.display = 'none';
   outStatusEl.textContent = '';
   lastPlan = null;
 }
@@ -340,17 +359,54 @@ function fmtDate(d){
   return d.toISOString().slice(0,10);
 }
 
+/* ---------- resource rates + cost ---------- */
+function renderRatesPanel(){
+  if (!lastPlan) { ratesPanel.style.display = 'none'; return; }
+  const rates = lastPlan.plan.resourceRates || {};
+  const roles = Object.keys(rates);
+  if (!roles.length){ ratesPanel.style.display = 'none'; return; }
+
+  ratesList.innerHTML = roles.map(role => `
+    <div class="rate-row">
+      <span class="role-name">${escapeHtml(role)}</span>
+      <span>$<input type="number" min="0" step="5" value="${rates[role]}" data-role="${escapeHtml(role)}" class="rate-input"> /hr</span>
+    </div>
+  `).join('');
+
+  ratesList.querySelectorAll('.rate-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      lastPlan.plan.resourceRates[inp.dataset.role] = parseFloat(inp.value) || 0;
+      updateCostSummary();
+    });
+  });
+
+  ratesPanel.style.display = 'block';
+  updateCostSummary();
+}
+
+function updateCostSummary(){
+  if (!lastPlan) return;
+  const hours = totalEffortHours(lastPlan.flatTasks);
+  const cost = totalCost(lastPlan.flatTasks, lastPlan.plan.resourceRates);
+  costSummary.textContent = `Total effort: ${hours.toLocaleString()} hours (${(hours/8).toLocaleString(undefined,{maximumFractionDigits:1})} effort-days)  ·  Estimated cost: $${cost.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+}
+
 /* ---------- flatten + render ---------- */
 function flattenPlan(plan){
   const flat = [];
   for (const phase of (plan.phases || [])){
     flat.push({ type: 'phase', name: phase.phaseName });
     for (const t of (phase.tasks || [])){
+      const headcount = Math.max(1, t.headcount || 1);
+      const effortHours = t.effortHours != null ? t.effortHours : (t.durationDays || 0) * 8;
+      const durationDays = t.durationDays != null ? t.durationDays : (effortHours / (headcount * 8));
       flat.push({
         type: 'task',
         id: t.id,
         name: t.name,
-        durationDays: t.durationDays || 0,
+        effortHours,
+        headcount,
+        durationDays,
         predecessors: t.predecessors || [],
         milestone: !!t.milestone,
         resourceRole: t.resourceRole || null
@@ -358,6 +414,17 @@ function flattenPlan(plan){
     }
   }
   return flat;
+}
+
+function totalEffortHours(flatTasks){
+  return flatTasks.filter(t => t.type === 'task' && !t.milestone).reduce((sum, t) => sum + (t.effortHours || 0), 0);
+}
+
+function totalCost(flatTasks, resourceRates){
+  return flatTasks.filter(t => t.type === 'task' && !t.milestone && t.resourceRole).reduce((sum, t) => {
+    const rate = (resourceRates && resourceRates[t.resourceRole]) || 0;
+    return sum + (t.effortHours || 0) * rate;
+  }, 0);
 }
 
 function renderGantt(flatTasks){
@@ -411,6 +478,7 @@ function renderGantt(flatTasks){
       const width = (dayOffset(row.finish) - dayOffset(row.start) + 1) * pxPerDay;
       const delay = (taskAnimIdx * 0.04).toFixed(3);
       taskAnimIdx++;
+      const effortTag = (!row.milestone && row.effortHours) ? `<span class="res-tag">${row.effortHours}h${row.headcount > 1 ? ' × ' + row.headcount : ''}</span>` : '';
       const resTag = row.resourceRole ? `<span class="res-tag">${escapeHtml(row.resourceRole)}</span>` : '';
       let bar;
       if (row.milestone){
@@ -419,7 +487,7 @@ function renderGantt(flatTasks){
         bar = `<div class="bar" style="left:${left}px;width:${Math.max(width,pxPerDay)}px;animation-delay:${delay}s;" title="${escapeHtml(row.name)} — ${fmtDate(row.start)} to ${fmtDate(row.finish)}"></div>`;
       }
       rowsHtml += `<div class="gantt-row">
-        <div class="row-label-col lvl-2">${escapeHtml(row.name)} ${resTag}</div>
+        <div class="row-label-col lvl-2">${escapeHtml(row.name)} ${resTag} ${effortTag}</div>
         <div class="timeline-track">${bar}</div>
       </div>`;
     }
@@ -455,7 +523,8 @@ function buildCSV(plan, flatTasks){
     }
   });
 
-  const rows = [['ID','Name','Outline Level','Duration','Start','Finish','Predecessors','Milestone','Resource Names']];
+  const rates = plan.resourceRates || {};
+  const rows = [['ID','Name','Outline Level','Duration','Start','Finish','Predecessors','Milestone','Resource Names','Effort Hours','Headcount','Cost']];
   flatTasks.forEach((row, idx) => {
     if (row.type === 'phase'){
       const span = phaseSpans[idx] || {};
@@ -467,9 +536,10 @@ function buildCSV(plan, flatTasks){
         days !== '' ? days + 'd' : '',
         span.start ? fmtDate(span.start) : '',
         span.finish ? fmtDate(span.finish) : '',
-        '', 'No', ''
+        '', 'No', '', '', '', ''
       ]);
     } else {
+      const cost = row.resourceRole ? (row.effortHours || 0) * (rates[row.resourceRole] || 0) : '';
       rows.push([
         row.id,
         row.name,
@@ -479,7 +549,10 @@ function buildCSV(plan, flatTasks){
         fmtDate(row.finish),
         (row.predecessors || []).join(';'),
         row.milestone ? 'Yes' : 'No',
-        row.resourceRole || ''
+        row.resourceRole || '',
+        row.milestone ? '' : row.effortHours,
+        row.milestone ? '' : row.headcount,
+        cost !== '' ? cost.toFixed(2) : ''
       ]);
     }
   });
@@ -554,10 +627,13 @@ function buildProjectXML(plan, flatTasks){
   <DurationFormat>7</DurationFormat>
   <Milestone>0</Milestone>
   <Summary>1</Summary>
+  <Manual>1</Manual>
 </Task>
 `;
     } else {
-      const hours = (row.durationDays || 0) * 8;
+      // Duration is CALENDAR time (already compressed by headcount); effortHours (below, on the
+      // Assignment) is the real person-hours of work. These are deliberately different numbers.
+      const durationHours = (row.durationDays || 0) * 8;
       let predXml = '';
       (row.predecessors || []).forEach(pid => {
         predXml += `  <PredecessorLink>
@@ -571,7 +647,7 @@ function buildProjectXML(plan, flatTasks){
       });
       const durationXml = row.milestone
         ? ''
-        : `  <Duration>PT${hours}H0M0S</Duration>
+        : `  <Duration>PT${durationHours}H0M0S</Duration>
   <DurationFormat>7</DurationFormat>
 `;
       taskXml += `<Task>
@@ -586,9 +662,64 @@ function buildProjectXML(plan, flatTasks){
   <Finish>${iso(row.finish,'17:00:00')}</Finish>
 ${durationXml}  <Milestone>${row.milestone ? 1 : 0}</Milestone>
   <Summary>0</Summary>
+  <Manual>1</Manual>
 ${predXml}</Task>
 `;
     }
+  });
+
+  // ---- Resources: one per distinct resourceRole actually used on a task ----
+  const rates = plan.resourceRates || {};
+  const roleInfo = {}; // role -> { maxHeadcount }
+  taskRows.forEach(row => {
+    if (row.resourceRole){
+      const cur = roleInfo[row.resourceRole] || { maxHeadcount: 1 };
+      cur.maxHeadcount = Math.max(cur.maxHeadcount, row.headcount || 1);
+      roleInfo[row.resourceRole] = cur;
+    }
+  });
+  const roleNames = Object.keys(roleInfo);
+  const roleUidMap = {};
+  let resourceUidCounter = 500000; // high range, clear of task/phase UIDs
+  let resourcesXml = '';
+  roleNames.forEach(role => {
+    const uid = resourceUidCounter++;
+    roleUidMap[role] = uid;
+    const rate = rates[role] || 0;
+    resourcesXml += `<Resource>
+  <UID>${uid}</UID>
+  <ID>${uid}</ID>
+  <Name>${esc(role)}</Name>
+  <Type>1</Type>
+  <IsNull>0</IsNull>
+  <MaxUnits>${roleInfo[role].maxHeadcount}</MaxUnits>
+  <StandardRate>${rate}</StandardRate>
+  <StandardRateFormat>2</StandardRateFormat>
+</Resource>
+`;
+  });
+
+  // ---- Assignments: one per task that has a resourceRole ----
+  let assignmentsXml = '';
+  let assignmentUidCounter = 1;
+  taskRows.forEach(row => {
+    if (!row.resourceRole || row.milestone) return;
+    const resUid = roleUidMap[row.resourceRole];
+    const rate = rates[row.resourceRole] || 0;
+    const workHours = row.effortHours || 0;
+    const units = row.headcount || 1;
+    const cost = (workHours * rate).toFixed(2);
+    assignmentsXml += `<Assignment>
+  <UID>${assignmentUidCounter++}</UID>
+  <TaskUID>${row.id}</TaskUID>
+  <ResourceUID>${resUid}</ResourceUID>
+  <Units>${units}</Units>
+  <Work>PT${workHours}H0M0S</Work>
+  <Cost>${cost}</Cost>
+  <Start>${iso(row.start,'08:00:00')}</Start>
+  <Finish>${iso(row.finish,'17:00:00')}</Finish>
+</Assignment>
+`;
   });
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -607,6 +738,10 @@ ${predXml}</Task>
 <CalendarUID>1</CalendarUID>
 <Tasks>
 ${taskXml}</Tasks>
+<Resources>
+${resourcesXml}</Resources>
+<Assignments>
+${assignmentsXml}</Assignments>
 </Project>`;
 }
 
@@ -653,9 +788,11 @@ generateBtn.addEventListener('click', async () => {
     const projectStart = new Date(startDateEl.value + 'T00:00:00');
     scheduleTasks(flat, projectStart);
 
+    if (!plan.resourceRates) plan.resourceRates = {};
     lastPlan = { plan, flatTasks: flat };
     outputContent.innerHTML = renderGantt(flat);
     outputActions.style.display = 'flex';
+    renderRatesPanel();
     outStatusEl.textContent = 'drafted';
   } catch (err){
     statusEl.textContent = 'Something went wrong: ' + err.message;
